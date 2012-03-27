@@ -1,0 +1,10 @@
+{
+  "name": "Collaborative Bookmarks",
+  "version": ".1",
+  "description": "Sync a bookmark folder with your friends",
+  "background_page": "background.html",
+  "permissions": [
+    "bookmarks",
+    "http://localhost/"
+  ]
+}

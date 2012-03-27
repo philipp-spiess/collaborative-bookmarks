@@ -1,0 +1,191 @@
+<html>
+<head>
+<title>Collaborative Bookmarks</title>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+<script type="text/javascript" src="http://jquery-json.googlecode.com/files/jquery.json-2.3.min.js"></script>
+<script type="text/javascript">
+  var url = 'http://localhost/sync.php?';
+  var path = url;
+
+  var b = chrome.bookmarks; // don't need to type that much
+  var folder = null;
+  var password = null;
+  var update_timeout = null;
+
+  function generate_path() {
+    // push password to api path 
+    path = url + 'password=' + password + '&';
+
+  }
+
+  function init(password_error) {
+    /** 
+     * Check for password
+     */
+     if(password_error != undefined) {
+        alert("Password wrong!");
+        password = null;
+        localStorage.passsword = null;
+     }
+    
+    password = localStorage.password;
+    
+    if(password == null || password == undefined || password_error != undefined) {
+      console.log("should be here");
+      do {        
+        localStorage.password = prompt("Insert password for colleborative bookmarks.");
+      } while(localStorage.password == undefined || localStorage.password == null);
+      password = localStorage.password;
+    }
+
+    generate_path();
+
+    b.getTree(
+      function(tree) {
+        var tree = tree[0];
+        var home = null;
+        for (var e in tree.children) {
+          var e = tree.children[e];
+          if(e.index == 0) {
+            home = e;
+          }
+        }
+        
+
+        if(home != null) {
+
+          /**
+           * Check if folder "shared" exists, if not, create
+           */
+          
+          for(var e in home.children) {
+            var e = home.children[e];
+            if(e.title == "shared") {
+              folder = e;
+            }
+          }
+
+          if(folder == null) {
+            b.create({
+              'parentId': home.id,
+              'title': 'shared'
+            },function(f){
+              folder = f;
+              cleanup();
+              add_listener();
+              sync();
+            });
+          } else {
+            cleanup();
+            add_listener();
+            sync();
+          }
+        } else {
+          console.error("This should never happen...");
+        }
+      }
+    );
+  }
+  function add_listener() {
+    b.onChanged.addListener(onChanged) 
+  }
+
+
+  function sync() {
+    console.log("sync();");
+    if (folder != null) {
+      var p = path;
+      $.ajax({
+        url: p,
+        dataType: 'json',
+        success: function(e){
+          if(e.error != undefined) {
+            init(true);
+          } else {
+            for( var item in e) {
+              var item = e[item];
+              syncFolder(item, null);
+            }
+          }
+          if(update_timeout != null) {
+            clearTimeout(update_timeout);
+          }
+          update_timeout = setTimeout("sync()", 60000);
+        },
+        error: function() {
+          if(update_timeout != null) {
+            clearTimeout(update_timeout);
+          }
+          update_timeout = setTimeout("sync()", 60000);
+        }
+      });
+    }
+  }
+
+  function syncFolder(item, parent) {
+    if(parent == null) {
+      parent = folder;
+    }
+
+    if(item.children == null) {
+      b.create({
+        'parentId': parent.id,
+        'title': item.title,
+        'url': item.url
+      });
+    } else {
+      b.create({
+        'parentId': parent.id,
+        'title': item.title
+      }, function(parent){
+        for(var e in item.children) {
+          var e = item.children[e];
+          syncFolder(e, parent);
+        }
+      });
+    }
+  }
+
+  function syncItem(item, parent) {
+    try {
+      if(item.url == undefined) {
+       b.create({
+          'parentId': parent.id,
+          'title': item.title
+       });
+        
+      } else {
+        b.create({
+            'parentId': parent.id,
+            'title': item.title,
+            'url': item.url
+        });
+      }
+    } catch(e) {
+      sync();
+    }
+  }
+
+  function cleanup(parent) {
+	if(parent == undefined) {
+	  parent = folder;
+	}
+    for ( var e in parent.children) {
+      var e = parent.children[e];
+	  if(e.children != undefined) {
+		cleanup(e);
+	  }
+      b.remove(e.id);
+    }
+  }
+
+  var onChanged = function onChanged(id, changeInfo) {
+    console.log(id);
+    console.log(changeInfo);
+  }
+
+</script>
+</head>
+<body onload="init();">
+</body>
+</html>
